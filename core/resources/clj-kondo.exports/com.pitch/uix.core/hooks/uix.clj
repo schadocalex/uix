@@ -156,12 +156,12 @@
 
 (defn rewrite [node & {:keys [defui?]}]
   (let [args (rest (:children node))
-        component-name (first args)
-        ?docstring (when (and defui? (string? (api/sexpr (second args))))
-                     (second args))
-        args (if ?docstring
-               (nnext args)
-               (next args))
+        [?component-name args] (if (or defui? (api/token-node? (first args)))
+                                 [(first args) (next args)]
+                                 [nil args])
+        [?docstring args] (if (and defui? (api/string-node? (first args)))
+                            [(first args) (next args)]
+                            [nil args])
         args-vec (api/sexpr (first args))
         [pre-body body] (if (api/map-node? (second args))
                           [(take 2 args) (nnext args)]
@@ -172,17 +172,17 @@
                (let [[_ _ rest-sym] (rest-props args-vec)
                      rest-sym (with-meta (api/token-node rest-sym) (meta rest-sym))]
                  [(api/list-node
-                    (list* (api/token-node 'let*)
-                           (api/vector-node [rest-sym (api/token-node nil)])
-                           body))])
+                   (list* (api/token-node 'let*)
+                          (api/vector-node [rest-sym (api/token-node nil)])
+                          body))])
                body)]
     (with-meta
       (api/list-node
-        (list* (api/token-node (if defui? 'defn 'fn))
-               component-name
-               (if ?docstring
-                 (into (into [?docstring] pre-body) body)
-                 (into (vec pre-body) body))))
+       (concat [(api/token-node (if defui? 'defn 'fn))]
+               (when ?component-name [?component-name])
+               (when ?docstring [?docstring])
+               pre-body
+               body))
       (meta node))))
 
 (defn defui [{:keys [node] :as ctx}]
